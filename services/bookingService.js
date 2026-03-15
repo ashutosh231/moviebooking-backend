@@ -46,8 +46,6 @@ function buildMovieMatchClause(movieId, movieName) {
         push(clauses, { "movie.id": new mongoose.Types.ObjectId(mid) });
         push(clauses, { movieId: new mongoose.Types.ObjectId(mid) });
       }
-      push(clauses, { "movie.id": mid });
-      push(clauses, { movieId: mid });
     }
   }
 
