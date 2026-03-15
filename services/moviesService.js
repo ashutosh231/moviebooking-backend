@@ -1,9 +1,9 @@
-import fs from "fs";
 import mongoose from "mongoose";
-import path from "path";
 import Movie from "../models/movieModel.js";
+import { deleteFromCloudinary } from "../config/cloudinary.js";
 
-const API_BASE = "http://localhost:4000";
+// Cloudinary URLs already are full https:// — only fall back to local for legacy filenames
+const API_BASE = process.env.API_BASE || "http://localhost:4000";
 
 const createHttpError = (status, message) => {
 	const err = new Error(message);
@@ -13,7 +13,9 @@ const createHttpError = (status, message) => {
 
 const getUploadUrl = (val) => {
 	if (!val) return null;
+	// Already a full Cloudinary / external URL — return as-is
 	if (typeof val === "string" && /^(https?:\/\/)/.test(val)) return val;
+	// Legacy: local filename -> local URL
 	const cleaned = String(val).replace(/^uploads\//, "");
 	if (!cleaned) return null;
 	return `${API_BASE}/uploads/${cleaned}`;
@@ -27,13 +29,15 @@ const extractFilenameFromUrl = (u) => {
 	return /^[^\/]+\.[a-zA-Z0-9]+$/.test(u) ? u : null;
 };
 
-const tryUnlinkUploadUrl = (urlOrFilename) => {
-	const fn = extractFilenameFromUrl(urlOrFilename);
-	if (!fn) return;
-	const filepath = path.join(process.cwd(), "uploads", fn);
-	fs.unlink(filepath, (err) => {
-		if (err) console.warn("Failed to unlink file", filepath, err?.message || err);
-	});
+// Delete a file from Cloudinary (or silently skip if it's a local/legacy path)
+const tryDeleteFile = async (urlOrFilename) => {
+	if (!urlOrFilename || typeof urlOrFilename !== "string") return;
+	if (/^https?:\/\/res\.cloudinary\.com\//.test(urlOrFilename)) {
+		// Detect resource type from URL
+		const resourceType = /\/video\//.test(urlOrFilename) ? 'video' : 'image';
+		await deleteFromCloudinary(urlOrFilename, resourceType);
+	}
+	// Legacy local file — silently ignore (no fs in scope intentionally)
 };
 
 const safeParseJSON = (v) => {
@@ -263,25 +267,24 @@ export async function deleteMovieService(id) {
 	const m = await Movie.findById(id);
 	if (!m) throw createHttpError(404, "Movie not found");
 
-	if (m.poster) tryUnlinkUploadUrl(m.poster);
-	if (m.latestTrailer && m.latestTrailer.thumbnail) tryUnlinkUploadUrl(m.latestTrailer.thumbnail);
+	// Delete poster + thumbnail from Cloudinary
+	const filesToDelete = [];
+	if (m.poster) filesToDelete.push(tryDeleteFile(m.poster));
+	if (m.latestTrailer?.thumbnail) filesToDelete.push(tryDeleteFile(m.latestTrailer.thumbnail));
 
+	// Delete people images
 	[m.cast || [], m.directors || [], m.producers || []].forEach((arr) =>
-		arr.forEach((p) => {
-			if (p && p.file) tryUnlinkUploadUrl(p.file);
-		})
+		arr.forEach((p) => { if (p?.file) filesToDelete.push(tryDeleteFile(p.file)); })
 	);
-
 	if (m.latestTrailer) {
-		[...(m.latestTrailer.directors || []), ...(m.latestTrailer.producers || []), ...(m.latestTrailer.singers || [])].forEach(
-			(p) => {
-				if (p && p.file) tryUnlinkUploadUrl(p.file);
-			}
-		);
+		[...(m.latestTrailer.directors || []), ...(m.latestTrailer.producers || []), ...(m.latestTrailer.singers || [])]
+			.forEach((p) => { if (p?.file) filesToDelete.push(tryDeleteFile(p.file)); });
 	}
 
+	await Promise.allSettled(filesToDelete);
 	await Movie.findByIdAndDelete(id);
 }
+
 
 export default {
 	createMovieService,

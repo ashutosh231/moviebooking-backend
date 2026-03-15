@@ -6,6 +6,8 @@ import {
   getOccupiedSeatsService,
   verifyPaymentService,
 } from "../services/bookingService.js";
+import { sendBookingConfirmationEmail } from "../services/emailService.js";
+
 
 /* ---------- Controllers (thin req/res layer) ---------- */
 
@@ -99,12 +101,24 @@ export async function getOccupiedSeats(req, res) {
 export async function confirmPayment(req, res) {
   try {
     const booking = await verifyPaymentService(req.body);
+
+    // Fire-and-forget booking confirmation email
+    const userEmail = booking?.userId?.email || req.user?.email || req.body.email || booking?.customer || "";
+    const userName  = booking?.userId?.fullName || req.user?.name || req.user?.fullName || booking?.customer || "Movie Fan";
+    
+    if (userEmail && userEmail.includes("@")) {
+      sendBookingConfirmationEmail({ to: userEmail, name: userName, booking })
+        .catch((err) => console.warn("Booking email failed (non-fatal):", err?.message || err));
+    }
+
+
     return res.json({ success: true, message: "Payment verified successfully", booking });
   } catch (err) {
     console.error("confirmPayment error:", err && err.stack ? err.stack : err);
     return res.status(err.status || 500).json({ success: false, message: err.message || "Server error" });
   }
 }
+
 
 export default {
   createBooking,

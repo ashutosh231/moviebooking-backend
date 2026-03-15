@@ -380,7 +380,7 @@ export async function verifyPaymentService({ razorpay_order_id, razorpay_payment
       }
     },
     { new: true }
-  ).exec();
+  ).populate("userId", "email fullName").exec();
 
   if (!booking) throw createHttpError(404, "Booking not found for this order");
   return booking;
