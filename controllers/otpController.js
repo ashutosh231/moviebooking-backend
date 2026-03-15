@@ -1,5 +1,5 @@
 // controllers/otpController.js
-import Otp from "../models/otpModel.js";
+import valkey from "../config/valkey.js";
 import { registerService } from "../services/userService.js";
 import { sendOtpEmail } from "../services/emailService.js";
 import { validationResult } from "express-validator";
@@ -12,7 +12,7 @@ function generateOtp() {
 /**
  * POST /api/auth/send-otp
  * Body: { name, email, password }
- * Generates OTP, stores it, sends email.
+ * Generates OTP, stores it in Valkey, sends email.
  */
 export async function sendOtp(req, res) {
   const errors = validationResult(req);
@@ -25,12 +25,10 @@ export async function sendOtp(req, res) {
 
   try {
     const otp = generateOtp();
+    const cacheKey = `otp:${email.toLowerCase()}`;
 
-    // Remove any previous OTP for this email
-    await Otp.deleteMany({ email: email.toLowerCase() });
-
-    // Save new OTP (expires in 10 min via TTL index)
-    await Otp.create({ email: email.toLowerCase(), otp });
+    // Replace the old OTP in Valkey with a firm 600-second (10 min) expiration
+    await valkey.setex(cacheKey, 600, otp);
 
     // Send email
     await sendOtpEmail({ to: email, name: fullName || "Movie Fan", otp });
@@ -48,7 +46,7 @@ export async function sendOtp(req, res) {
 /**
  * POST /api/auth/verify-otp
  * Body: { name, email, password, otp }
- * Verifies OTP and registers user if valid.
+ * Verifies OTP from Valkey and registers user if valid.
  */
 export async function verifyOtpAndRegister(req, res) {
   const errors = validationResult(req);
@@ -61,19 +59,21 @@ export async function verifyOtpAndRegister(req, res) {
   if (!otp) return res.status(400).json({ success: false, message: "OTP is required" });
 
   try {
-    // Find latest OTP for this email
-    const record = await Otp.findOne({ email: email.toLowerCase() }).sort({ createdAt: -1 });
+    const cacheKey = `otp:${email.toLowerCase()}`;
+    
+    // Fetch OTP directly from Valkey cache memory
+    const cachedOtp = await valkey.get(cacheKey);
 
-    if (!record) {
+    if (!cachedOtp) {
       return res.status(400).json({ success: false, message: "OTP expired or not requested. Please request a new OTP." });
     }
 
-    if (record.otp !== String(otp).trim()) {
+    if (cachedOtp !== String(otp).trim()) {
       return res.status(400).json({ success: false, message: "Incorrect OTP. Please try again." });
     }
 
-    // OTP valid — delete record and register user
-    await Otp.deleteMany({ email: email.toLowerCase() });
+    // OTP is valid — delete from Valkey instantly and register user
+    await valkey.del(cacheKey);
 
     const result = await registerService(req.body);
 

@@ -66,9 +66,11 @@ function cloudinaryMultiUpload(req, res, next) {
   });
 }
 
+import { cacheMiddleware } from "../middlewares/cache.js";
+
 movieRouter.post("/", cloudinaryMultiUpload, createMovie);
-movieRouter.get("/", getMovies);
-movieRouter.get("/:id", getMovieById);
+movieRouter.get("/", cacheMiddleware(3600), getMovies); // Cache movie list for 1 hour
+movieRouter.get("/:id", cacheMiddleware(3600), getMovieById); // Cache individual movie details for 1 hour
 movieRouter.delete("/:id", deleteMovie);
 
 export default movieRouter;
