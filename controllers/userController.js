@@ -1,5 +1,5 @@
 import { validationResult } from "express-validator";
-import { registerService,loginService } from "../services/userService.js";
+import { registerService, loginService, adminLoginService } from "../services/userService.js";
 
 export const registerUser = async (req, res) => {
   const errors = validationResult(req);
@@ -61,5 +61,23 @@ export const loginUser = async (req, res) => {
             success: false,
             message: err.message,
         });
+    };
 };
+
+export const adminLoginUser = async (req, res) => {
+    try {
+        const result = await adminLoginService(req.body);
+        return res.status(200).json({
+            success: true,
+            message: "Admin logged in successfully",
+            token: result.token,
+            user: result.user,
+        });
+    } catch (err) {
+        const status = err.status || 400;
+        return res.status(status).json({
+            success: false,
+            message: err.message || "Admin login failed",
+        });
+    }
 };

@@ -11,18 +11,18 @@ import {
 const movieRouter = express.Router();
 
 /* ─── Cloudinary storage buckets ──────────────────────────────────── */
-const posterStorage    = makeStorage("movieverse/posters");
-const trailerStorage   = makeStorage("movieverse/trailers");
-const videoStorage     = makeStorage("movieverse/videos");
+const posterStorage = makeStorage("movieverse/posters");
+const trailerStorage = makeStorage("movieverse/trailers");
+const videoStorage = makeStorage("movieverse/videos");
 const thumbnailStorage = makeStorage("movieverse/thumbnails");
-const peopleStorage    = makeStorage("movieverse/people");
+const peopleStorage = makeStorage("movieverse/people");
 
 /* ─── Individual upload instances ─────────────────────────────────── */
-const uploadPoster    = multer({ storage: posterStorage });
-const uploadTrailer   = multer({ storage: trailerStorage });
-const uploadVideo     = multer({ storage: videoStorage });
-const uploadThumb     = multer({ storage: thumbnailStorage });
-const uploadPeople    = multer({ storage: peopleStorage });
+const uploadPoster = multer({ storage: posterStorage });
+const uploadTrailer = multer({ storage: trailerStorage });
+const uploadVideo = multer({ storage: videoStorage });
+const uploadThumb = multer({ storage: thumbnailStorage });
+const uploadPeople = multer({ storage: peopleStorage });
 
 /*
  * Combined middleware: run each multer upload in sequence so each field
@@ -41,12 +41,12 @@ function cloudinaryMultiUpload(req, res, next) {
         uploadThumb.fields([{ name: "ltThumbnail", maxCount: 1 }])(req, res, (err4) => {
           if (err4) return next(err4);
           uploadPeople.fields([
-            { name: "castFiles",     maxCount: 20 },
+            { name: "castFiles", maxCount: 20 },
             { name: "directorFiles", maxCount: 20 },
             { name: "producerFiles", maxCount: 20 },
             { name: "ltDirectorFiles", maxCount: 20 },
             { name: "ltProducerFiles", maxCount: 20 },
-            { name: "ltSingerFiles",   maxCount: 20 },
+            { name: "ltSingerFiles", maxCount: 20 },
           ])(req, res, (err5) => {
             if (err5) return next(err5);
             // Normalise: set file.filename = file.path (Cloudinary secure_url)

@@ -1,5 +1,5 @@
 import express from "express";
-import { registerUser, loginUser } from "../controllers/userController.js";
+import { registerUser, loginUser, adminLoginUser } from "../controllers/userController.js";
 import { sendOtp, verifyOtpAndRegister } from "../controllers/otpController.js";
 import { registerValidation } from "../middlewares/user.validator.js";
 
@@ -13,5 +13,6 @@ userRouter.post("/verify-otp", verifyOtpAndRegister);
 userRouter.post("/register", registerValidation, registerUser);
 
 userRouter.post("/login", loginUser);
+userRouter.post("/admin-login", adminLoginUser);
 
 export default userRouter;

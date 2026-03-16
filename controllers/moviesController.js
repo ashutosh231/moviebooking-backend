@@ -6,6 +6,8 @@ import {
   getMoviesService,
 } from "../services/moviesService.js";
 
+import { clearCache } from "../middlewares/cache.js";
+
 /* ---------------------- controllers ---------------------- */
 export async function createMovie(req, res) {
   try {
@@ -13,6 +15,8 @@ export async function createMovie(req, res) {
       body: req.body,
       files: req.files,
     });
+    // Invalidate movie cache
+    await clearCache("cache:/api/movies*");
     return res.status(201).json({ success: true, message: "Movie created", data: saved });
   } catch (err) {
     console.error("createMovie error:", err);
@@ -48,6 +52,8 @@ export async function deleteMovie(req, res) {
   try {
     const { id } = req.params || {};
     await deleteMovieService(id);
+    // Invalidate movie cache
+    await clearCache("cache:/api/movies*");
     return res.json({ success: true, message: "Movie deleted" });
   } catch (err) {
     console.error("deleteMovie error:", err);

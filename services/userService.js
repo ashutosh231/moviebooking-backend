@@ -60,11 +60,13 @@ export const loginService = async (data) => {
   const user = await User.findOne({
     email: email.toLowerCase().trim()
   });
+  if (!user) throw new Error("Invalid email or password");
   const isMatch = await bcrypt.compare(password, user.password);
-  if(!isMatch){
+  if (!isMatch) {
     throw new Error("Invalid password");
   }
-  const token = mkToken({ id: user._id.toString() });
+  // Include role in the token so frontend can detect admin users
+  const token = mkToken({ id: user._id.toString(), role: user.role || "user" });
   return {
     token,
     user: {
@@ -74,6 +76,31 @@ export const loginService = async (data) => {
       email: user.email,
       phone: user.phone,
       birthDate: user.birthDate,
+      role: user.role || "user",
+    },
+  };
+};
+
+export const adminLoginService = async (data) => {
+  const { email, password } = data || {};
+  const user = await User.findOne({
+    email: email.toLowerCase().trim()
+  });
+  if (!user) throw new Error("Invalid email or password");
+  const isMatch = await bcrypt.compare(password, user.password);
+  if (!isMatch) throw new Error("Invalid email or password");
+  if (user.role !== "admin") {
+    throw Object.assign(new Error("Access denied. Admin privileges required."), { status: 403 });
+  }
+  const token = mkToken({ id: user._id.toString(), role: "admin" });
+  return {
+    token,
+    user: {
+      id: user._id,
+      fullName: user.fullName,
+      username: user.username,
+      email: user.email,
+      role: "admin",
     },
   };
 };
