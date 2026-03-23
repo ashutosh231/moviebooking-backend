@@ -8,6 +8,7 @@ import userRouter from './routes/userRouter.js';
 import movieRouter from './routes/movieRouter.js';
 import bookingRouter from './routes/bookingRouter.js';
 import aiRouter from './routes/aiRouter.js';
+import cinemaRouter from './routes/cinemaRouter.js';
 import cookieParser from 'cookie-parser';
 
 import path from 'path';
@@ -71,6 +72,7 @@ app.use('/api/auth', userRouter);
 app.use('/api/movies', movieRouter);
 app.use('/api/bookings', bookingRouter);
 app.use('/api/ai', aiRouter);
+app.use('/api/cinemas', cinemaRouter);
 
 
 app.get('/', (_req, res) => res.send('API is running'));

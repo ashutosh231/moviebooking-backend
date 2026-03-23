@@ -25,6 +25,15 @@ const bookingSchema = new Schema(
       rating: { type: Number, default: null },
     },
 
+    // lightweight cinema snapshot (TRUSTED FROM DB ONLY)
+    cinema: {
+      id: { type: Schema.Types.ObjectId, ref: "Cinema", required: false },
+      name: { type: String, default: "" },
+      address: { type: String, default: "" },
+      city: { type: String, default: "" },
+      state: { type: String, default: "" },
+    },
+
     // showtime & auditorium
     showtime: { type: Date, required: true, index: true },
     auditorium: { type: String, default: "Audi 1", index: true },

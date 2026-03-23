@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import crypto from "crypto";
 import Booking from "../models/bookingModel.js";
 import Movie from "../models/movieModel.js";
+import Cinema from "../models/cinemaModel.js";
 import Razorpay from "razorpay";
 import dotenv from "dotenv";
 dotenv.config();
@@ -163,6 +164,9 @@ export async function createBookingService({ user, body }) {
   const email = String(body.email || (user && user.email) || "");
   const paymentMethod = String(body.paymentMethod || "card").toLowerCase();
   const currency = String(body.currency || "inr").toLowerCase();
+  
+  // Accept cinemaId securely from the frontend
+  const cinemaId = body.cinemaId || null;
 
   if (!body.showtime || (rawSeats.length === 0 && seatIdsFromBody.length === 0) || !email) {
     throw createHttpError(400, "Missing required fields (showtime/seats/email)");
@@ -176,6 +180,12 @@ export async function createBookingService({ user, body }) {
     movie = await Movie.findById(movieId).lean().exec().catch(() => null);
   } else if (movieName) {
     movie = await Movie.findOne({ $or: [{ title: movieName }, { movieName }] }).lean().exec().catch(() => null);
+  }
+
+  // Fetch trusted cinema
+  let cinema = null;
+  if (cinemaId && mongoose.Types.ObjectId.isValid(String(cinemaId))) {
+    cinema = await Cinema.findById(cinemaId).lean().exec().catch(() => null);
   }
 
   const normalizedSeats = normalizeSeatsFromInput(rawSeats, seatIdsFromBody, movie);
@@ -257,10 +267,23 @@ export async function createBookingService({ user, body }) {
       durationMins: 0
     };
 
+  // Cinema trusted snapshot
+  let cinemaSnapshot = undefined;
+  if (cinema) {
+    cinemaSnapshot = {
+      id: cinema._id,
+      name: cinema.name,
+      address: cinema.address,
+      city: cinema.city,
+      state: cinema.state
+    };
+  }
+
   const doc = {
     userId: user && user._id ? new mongoose.Types.ObjectId(user._id) : undefined,
     customer,
     movie: movieSnapshot,
+    cinema: cinemaSnapshot,
     movieId: movieSnapshot.id,
     movieName: movieSnapshot.title,
     showtime,

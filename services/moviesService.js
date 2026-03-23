@@ -82,7 +82,8 @@ const buildLatestTrailerPeople = (arr = []) =>
 	}));
 
 const enrichLatestTrailerForOutput = (lt = {}) => {
-	const copy = { ...lt };
+	const raw = typeof lt.toObject === "function" ? lt.toObject() : lt;
+	const copy = { ...raw };
 	copy.thumbnail = copy.thumbnail ? getUploadUrl(copy.thumbnail) : copy.thumbnail || null;
 	const mapPerson = (p) => {
 		const c = { ...(p || {}) };
@@ -98,16 +99,17 @@ const enrichLatestTrailerForOutput = (lt = {}) => {
 };
 
 const normalizeItemForOutput = (it = {}) => {
-	const obj = { ...it };
-	obj.thumbnail = it.latestTrailer?.thumbnail
-		? getUploadUrl(it.latestTrailer.thumbnail)
-		: it.poster
-			? getUploadUrl(it.poster)
+	const raw = typeof it.toObject === "function" ? it.toObject() : it;
+	const obj = { ...raw };
+	obj.thumbnail = raw.latestTrailer?.thumbnail
+		? getUploadUrl(raw.latestTrailer.thumbnail)
+		: raw.poster
+			? getUploadUrl(raw.poster)
 			: null;
-	obj.trailerUrl = it.trailerUrl || it.latestTrailer?.url || it.latestTrailer?.videoId || null;
+	obj.trailerUrl = raw.trailerUrl || raw.latestTrailer?.url || raw.latestTrailer?.videoId || null;
 
-	if (it.type === "latestTrailers" && it.latestTrailer) {
-		const lt = it.latestTrailer;
+	if (raw.type === "latestTrailers" && raw.latestTrailer) {
+		const lt = raw.latestTrailer;
 		obj.genres = obj.genres || lt.genres || [];
 		obj.year = obj.year || lt.year || null;
 		obj.rating = obj.rating || lt.rating || null;
@@ -115,13 +117,13 @@ const normalizeItemForOutput = (it = {}) => {
 		obj.description = obj.description || lt.description || lt.excerpt || "";
 	}
 
-	obj.cast = (it.cast || []).map(personToPreview);
-	obj.directors = (it.directors || []).map(personToPreview);
-	obj.producers = (it.producers || []).map(personToPreview);
+	obj.cast = (raw.cast || []).map(personToPreview);
+	obj.directors = (raw.directors || []).map(personToPreview);
+	obj.producers = (raw.producers || []).map(personToPreview);
 
-	if (it.latestTrailer) obj.latestTrailer = enrichLatestTrailerForOutput(it.latestTrailer);
+	if (raw.latestTrailer) obj.latestTrailer = enrichLatestTrailerForOutput(raw.latestTrailer);
 
-	obj.auditorium = it.auditorium || null;
+	obj.auditorium = raw.auditorium || null;
 
 	return obj;
 };
@@ -211,6 +213,92 @@ export async function createMovieService({ body = {}, files = {} }) {
 	});
 
 	return doc.save();
+}
+
+export async function updateMovieService({ id, body = {}, files = {} }) {
+	const existing = await Movie.findById(id);
+	if (!existing) throw createHttpError(404, "Movie not found");
+
+	const posterUrl = files?.poster?.[0]?.filename ? getUploadUrl(files.poster[0].filename) : existing.poster;
+	const trailerUrl = files?.trailerUrl?.[0]?.filename
+		? getUploadUrl(files.trailerUrl[0].filename)
+		: body.trailerUrl || existing.trailerUrl;
+	const videoUrl = files?.videoUrl?.[0]?.filename ? getUploadUrl(files.videoUrl[0].filename) : body.videoUrl || existing.videoUrl;
+
+	const categories = safeParseJSON(body.categories) ||
+		(body.categories ? String(body.categories).split(",").map((s) => s.trim()).filter(Boolean) : existing.categories);
+	
+	const slots = safeParseJSON(body.slots) || existing.slots;
+	const seatPrices = safeParseJSON(body.seatPrices) || {
+		standard: Number(body.standard || existing.seatPrices?.standard || 0),
+		recliner: Number(body.recliner || existing.seatPrices?.recliner || 0),
+	};
+
+	const cast = safeParseJSON(body.cast) || existing.cast;
+	const directors = safeParseJSON(body.directors) || existing.directors;
+	const producers = safeParseJSON(body.producers) || existing.producers;
+
+	const attachFiles = (filesArrName, targetArr, toFilename = (f) => getUploadUrl(f)) => {
+		if (!files?.[filesArrName]) return;
+		files[filesArrName].forEach((file, idx) => {
+			if (targetArr[idx]) targetArr[idx].file = toFilename(file.filename);
+			else targetArr[idx] = { name: "", file: toFilename(file.filename) };
+		});
+	};
+	attachFiles("castFiles", cast);
+	attachFiles("directorFiles", directors);
+	attachFiles("producerFiles", producers);
+
+	let latestTrailerBody = safeParseJSON(body.latestTrailer) || existing.latestTrailer || {};
+	if (files?.ltThumbnail?.[0]?.filename) latestTrailerBody.thumbnail = files.ltThumbnail[0].filename;
+	else if (body.ltThumbnail) {
+		const fn = extractFilenameFromUrl(body.ltThumbnail);
+		latestTrailerBody.thumbnail = fn || body.ltThumbnail;
+	}
+	if (body.ltVideoUrl !== undefined) latestTrailerBody.videoId = body.ltVideoUrl;
+	if (body.ltUrl !== undefined) latestTrailerBody.url = body.ltUrl;
+	if (body.ltTitle !== undefined) latestTrailerBody.title = body.ltTitle;
+
+	latestTrailerBody.directors = latestTrailerBody.directors || [];
+	latestTrailerBody.producers = latestTrailerBody.producers || [];
+	latestTrailerBody.singers = latestTrailerBody.singers || [];
+
+	const attachLtFiles = (fieldName, arrName) => {
+		if (!files?.[fieldName]) return;
+		files[fieldName].forEach((file, idx) => {
+			const filename = file.filename;
+			if (latestTrailerBody[arrName][idx]) latestTrailerBody[arrName][idx].file = filename;
+			else latestTrailerBody[arrName][idx] = { name: "", file: filename };
+		});
+	};
+	attachLtFiles("ltDirectorFiles", "directors");
+	attachLtFiles("ltProducerFiles", "producers");
+	attachLtFiles("ltSingerFiles", "singers");
+
+	latestTrailerBody.directors = buildLatestTrailerPeople(latestTrailerBody.directors);
+	latestTrailerBody.producers = buildLatestTrailerPeople(latestTrailerBody.producers);
+	latestTrailerBody.singers = buildLatestTrailerPeople(latestTrailerBody.singers);
+
+	const auditoriumValue = typeof body.auditorium === "string" && body.auditorium.trim() ? String(body.auditorium).trim() : existing.auditorium;
+
+	existing.type = body.type || existing.type;
+	existing.movieName = body.movieName || body.title || existing.movieName;
+	existing.categories = categories;
+	existing.poster = posterUrl;
+	existing.trailerUrl = trailerUrl;
+	existing.videoUrl = videoUrl;
+	if (body.rating !== undefined) existing.rating = Number(body.rating) || 0;
+	if (body.duration !== undefined) existing.duration = Number(body.duration) || 0;
+	existing.slots = slots;
+	existing.seatPrices = seatPrices;
+	existing.cast = cast;
+	existing.directors = directors;
+	existing.producers = producers;
+	if (body.story !== undefined) existing.story = body.story;
+	existing.latestTrailer = latestTrailerBody;
+	existing.auditorium = auditoriumValue;
+
+	return existing.save();
 }
 
 export async function getMoviesService(query = {}) {

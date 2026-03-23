@@ -1,6 +1,7 @@
 // controllers/movieController.js
 import {
   createMovieService,
+  updateMovieService,
   deleteMovieService,
   getMovieByIdService,
   getMoviesService,
@@ -32,6 +33,25 @@ export async function createMovie(req, res) {
   } catch (err) {
 
     console.error("createMovie error:", err);
+    const status = err.status || 500;
+    return res.status(status).json({ success: false, message: err.message || "Server error" });
+  }
+}
+
+export async function updateMovie(req, res) {
+  try {
+    const { id } = req.params;
+    const updated = await updateMovieService({
+      id,
+      body: req.body,
+      files: req.files,
+    });
+    // Invalidate cache
+    await clearCache("cache:/api/movies*");
+
+    return res.json({ success: true, message: "Movie updated", data: updated });
+  } catch (err) {
+    console.error("updateMovie error:", err);
     const status = err.status || 500;
     return res.status(status).json({ success: false, message: err.message || "Server error" });
   }
@@ -74,4 +94,4 @@ export async function deleteMovie(req, res) {
   }
 }
 
-export default { createMovie, getMovies, getMovieById, deleteMovie };
+export default { createMovie, updateMovie, getMovies, getMovieById, deleteMovie };

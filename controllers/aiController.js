@@ -1,5 +1,6 @@
 import axios from 'axios';
 import dotenv from 'dotenv';
+import Cinema from '../models/cinemaModel.js';
 dotenv.config();
 
 /**
@@ -36,6 +37,17 @@ export const chatWithAI = async (req, res) => {
             - Genres to Avoid: ${userPreferences.avoidGenres?.join(', ') || 'None specified'}`;
         }
 
+        // Fetch live cinemas to inject into AI context
+        const cinemas = await Cinema.find({ isActive: true }).select('name address city state pincode facilities');
+        let cinemaContext = "\n\nOUR CINEMA LOCATIONS (Suggest ONLY these theaters when asked about locations, bookings, or cinemas):\n";
+        if (cinemas && cinemas.length > 0) {
+            cinemas.forEach(c => {
+                cinemaContext += `- **${c.name}** in ${c.city}, ${c.state} (${c.pincode}). Address: ${c.address}. Facilities: ${c.facilities?.join(', ') || 'Standard'}.\n`;
+            });
+        } else {
+            cinemaContext += "No active cinemas available in the database currently.";
+        }
+
         // System prompt to keep the AI focused on movie booking context
         const systemPrompt = {
             role: "system",
@@ -43,11 +55,12 @@ export const chatWithAI = async (req, res) => {
             Your goals:
             1. Recommend movies based on mood, genre, or occasion (date night, family, etc.).
             2. Explain various movie genres and cinematic experiences.
-            3. Help users with platform-related guidance (booking flow, finding showtimes).
+            3. Help users find our real local cinemas and booking flow.
             4. Keep responses concise, friendly, and professional.
             5. Avoid talking about non-movie related topics unless it's polite small talk.
-            6. If you don't know something specific about a local cinema, provide general helpful guidance.
-            ${preferencesContext}`
+            6. ONLY provide cinema recommendations from the OUR CINEMA LOCATIONS list below. Do not make up fake cinemas or use general knowledge for our specific theaters.
+            ${preferencesContext}
+            ${cinemaContext}`
         };
 
 

@@ -103,6 +103,7 @@ export function bookingConfirmationTemplate({ name, booking }) {
   const {
     _id,
     movie = {},
+    cinema = {},
     showtime,
     auditorium,
     seats = [],
@@ -171,9 +172,13 @@ export function bookingConfirmationTemplate({ name, booking }) {
           <p style="margin:0 0 4px;color:#888;font-size:13px;">
             🕐 ${timeStr}
           </p>
-          <p style="margin:0;color:#888;font-size:13px;">
-            🏛 ${auditorium || "Audi 1"}
+          <p style="margin:0 0 4px;color:#888;font-size:13px;">
+            🏛 ${cinema.name || "CineVerse"} &bull; ${auditorium || "Audi 1"}
           </p>
+          ${cinema.address ? `
+          <p style="margin:0;color:#777;font-size:12px;">
+            📍 ${cinema.address}${cinema.city ? `, ${cinema.city}` : ""}
+          </p>` : ""}
         </div>
         <div style="clear:both;"></div>
       </div>
@@ -248,6 +253,11 @@ export function bookingCancellationTemplate({ name, booking }) {
           <td align="right" style="color:#ccc;font-size:12px;font-family:'Courier New',monospace;
                                     padding-bottom:8px;">${bookingId}</td>
         </tr>
+        ${booking?.cinema?.name ? `
+        <tr>
+          <td style="color:#888;font-size:13px;padding-bottom:8px;">Cinema</td>
+          <td align="right" style="color:#ccc;font-size:13px;padding-bottom:8px;">${booking.cinema.name}</td>
+        </tr>` : ""}
         <tr>
           <td style="color:#888;font-size:13px;">Status</td>
           <td align="right" style="color:#e50914;font-size:13px;font-weight:700;">REFUNDED / CANCELLED</td>
