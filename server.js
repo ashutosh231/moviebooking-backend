@@ -7,7 +7,9 @@ import connectDB from './config/db.js';
 import userRouter from './routes/userRouter.js';
 import movieRouter from './routes/movieRouter.js';
 import bookingRouter from './routes/bookingRouter.js';
+import aiRouter from './routes/aiRouter.js';
 import cookieParser from 'cookie-parser';
+
 import path from 'path';
 import { setIO } from './services/socketService.js';
 import './workers/notificationWorker.js'; // Start the BullMQ worker background process
@@ -68,6 +70,8 @@ app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 app.use('/api/auth', userRouter);
 app.use('/api/movies', movieRouter);
 app.use('/api/bookings', bookingRouter);
+app.use('/api/ai', aiRouter);
+
 
 app.get('/', (_req, res) => res.send('API is running'));
 
