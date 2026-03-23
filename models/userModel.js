@@ -31,7 +31,25 @@ const userSchema = new mongoose.Schema(
         type: String,
         enum: ["user", "admin"],
         default: "user"
+    },
+    onboardingCompleted: {
+        type: Boolean,
+        default: false
+    },
+    avatar: {
+        type: String,
+        default: ""
+    },
+    preferences: {
+        genres: [{ type: String }],
+        languages: [{ type: String }],
+        watchWith: { type: String, default: "" },
+        experience: [{ type: String }],
+        showTimings: [{ type: String }],
+        priorityFactors: [{ type: String }],
+        avoidGenres: [{ type: String }]
     }
+
   },
   { timestamps: true }
 );

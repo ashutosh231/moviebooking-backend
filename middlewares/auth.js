@@ -6,14 +6,18 @@ dotenv.config();
 const JWT_SECRET = process.env.JWT_SECRET;
 
 export default async function authMiddleware(req, res, next) {
-    // 1. Grab the Bearer token from Authorization header
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    // 1. Grab the token from cookies (fallback to Authorization header for flexibility during transition if needed, but primarily cookies)
+    let token = req.cookies?.token;
+    
+    if (!token && req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
+        token = req.headers.authorization.split(' ')[1];
+    }
+
+    if (!token) {
         return res
             .status(401)
             .json({ success: false, message: 'Not authorized, token missing' });
     }
-    const token = authHeader.split(' ')[1];
 
     // 2. Verify & attach user object
     try {

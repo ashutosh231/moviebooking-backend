@@ -1,18 +1,36 @@
 import express from "express";
-import { registerUser, loginUser, adminLoginUser } from "../controllers/userController.js";
-import { sendOtp, verifyOtpAndRegister } from "../controllers/otpController.js";
+import { registerUser, loginUser, adminLoginUser, getUserProfile, updateUserProfile, uploadAvatar } from "../controllers/userController.js";
+import { sendOtp, verifyOtpAndRegister, forgotPassword, resetPassword } from "../controllers/otpController.js";
 import { registerValidation } from "../middlewares/user.validator.js";
+import { authLimiter } from "../middlewares/rateLimiter.js";
+import authMiddleware from "../middlewares/auth.js";
+import multer from "multer";
+import { makeStorage } from "../config/cloudinary.js";
 
 const userRouter = express.Router();
 
+const avatarStorage = makeStorage("movieverse/avatars");
+const upload = multer({ storage: avatarStorage });
+
+// Profile Management
+userRouter.get("/profile", authMiddleware, getUserProfile);
+userRouter.put("/profile", authMiddleware, updateUserProfile);
+userRouter.post("/avatar", authMiddleware, upload.single("avatar"), uploadAvatar);
+
+
+
 // OTP-based registration (2-step)
-userRouter.post("/send-otp", sendOtp);
-userRouter.post("/verify-otp", verifyOtpAndRegister);
+userRouter.post("/send-otp", authLimiter, sendOtp);
+userRouter.post("/verify-otp", authLimiter, verifyOtpAndRegister);
+
+// Password Reset Flow
+userRouter.post("/forgot-password", authLimiter, forgotPassword);
+userRouter.post("/reset-password", authLimiter, resetPassword);
 
 // Direct registration (kept for backward compat)
-userRouter.post("/register", registerValidation, registerUser);
+userRouter.post("/register", authLimiter, registerValidation, registerUser);
 
-userRouter.post("/login", loginUser);
-userRouter.post("/admin-login", adminLoginUser);
+userRouter.post("/login", authLimiter, loginUser);
+userRouter.post("/admin-login", authLimiter, adminLoginUser);
 
 export default userRouter;

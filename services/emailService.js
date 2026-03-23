@@ -1,6 +1,10 @@
-// services/emailService.js
 import transporter, { FROM_ADDRESS } from "../config/mailer.js";
-import { otpEmailTemplate, bookingConfirmationTemplate } from "../config/emailTemplates.js";
+import {
+  otpEmailTemplate,
+  bookingConfirmationTemplate,
+  bookingCancellationTemplate,
+  movieAnnouncementTemplate,
+} from "../config/emailTemplates.js";
 
 /**
  * Send the OTP verification email.
@@ -8,7 +12,7 @@ import { otpEmailTemplate, bookingConfirmationTemplate } from "../config/emailTe
 export async function sendOtpEmail({ to, name, otp }) {
   const html = otpEmailTemplate({ name, otp });
   await transporter.sendMail({
-    from:    FROM_ADDRESS,
+    from: FROM_ADDRESS,
     to,
     subject: `${otp} — Your CineVerse verification code`,
     html,
@@ -17,17 +21,45 @@ export async function sendOtpEmail({ to, name, otp }) {
 
 /**
  * Send booking confirmation email after successful payment.
- * @param {string} to  - recipient email
- * @param {string} name - customer name
- * @param {object} booking - populated booking document (plain object)
  */
 export async function sendBookingConfirmationEmail({ to, name, booking }) {
   const html = bookingConfirmationTemplate({ name, booking });
   const movieTitle = booking?.movie?.title || booking?.movie?.movieName || "your movie";
   await transporter.sendMail({
-    from:    FROM_ADDRESS,
+    from: FROM_ADDRESS,
     to,
     subject: `🎬 Booking Confirmed — ${movieTitle} | CineVerse`,
     html,
   });
 }
+
+/**
+ * Send booking cancellation email.
+ */
+export async function sendBookingCancellationEmail({ to, name, booking }) {
+  const html = bookingCancellationTemplate({ name, booking });
+  const movieTitle = booking?.movie?.title || booking?.movie?.movieName || "your movie";
+  await transporter.sendMail({
+    from: FROM_ADDRESS,
+    to,
+    subject: `⚠️ Booking Cancelled — ${movieTitle} | CineVerse`,
+    html,
+  });
+}
+
+/**
+ * Send a notification about a new or featured movie to a user.
+ */
+export async function sendMovieNotificationEmail({ to, name, movie, isFeatured = false }) {
+  const html = movieAnnouncementTemplate({ name, movie, isFeatured });
+  const movieTitle = movie.movieName || movie.title || "New Release";
+  const prefix = isFeatured ? "⭐ Featured" : "🔥 New Movie";
+
+  await transporter.sendMail({
+    from: FROM_ADDRESS,
+    to,
+    subject: `${prefix}: ${movieTitle} is now at CineVerse!`,
+    html,
+  });
+}
+

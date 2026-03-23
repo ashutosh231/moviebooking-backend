@@ -5,11 +5,26 @@ import Movie from "../models/movieModel.js";
 import Razorpay from "razorpay";
 import dotenv from "dotenv";
 dotenv.config();
+import { confirmAndReleaseLocks, lockSeats, releaseSeats } from "./seatLockService.js";
+import { getUploadUrl } from "./moviesService.js";
+
 
 const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID;
 const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET;
 const RECLINER_ROWS = new Set(["D", "E"]);
-const BLOCKING_STATUSES = ["pending", "paid", "confirmed", "active", "upcoming"];
+// "pending" is removed because Valkey temporary locks now guard the 5-min checkout window.
+// If a user abandons a checkout, the MongoDB "pending" booking stays forever but shouldn't block seats.
+const BLOCKING_STATUSES = ["paid", "confirmed", "active", "upcoming"];
+
+// Builds the same showId key used by seatLockService
+// Format: {movieId}_{showtime}_{auditorium}
+function buildShowId(movieId, showtime, auditorium) {
+  const show = String(showtime || "unknown").replace(/[^a-zA-Z0-9]/g, "-");
+  const audi = String(auditorium || "Audi1").replace(/\s+/g, "");
+  const mid = String(movieId || "unknown").replace(/[^a-zA-Z0-9]/g, "-");
+  return `${mid}_${show}_${audi}`;
+}
+
 
 /* ---------- Helpers ---------- */
 
@@ -195,16 +210,45 @@ export async function createBookingService({ user, body }) {
 
   const seatIdList = Array.from(new Set(normalizedSeats.map(s => s.seatId)));
 
+  // ── VALKEY SEAT LOCK (primary race-condition guard) ────────────────
+  // We attempt to atomically lock all requested seats in Valkey BEFORE
+  // writing to MongoDB. The Lua script in seatLockService ensures that
+  // check-and-set is atomic, so two simultaneous requests cannot both
+  // pass this point for the same seat.
+  const userId = String(user?._id || user?.id || "");
+  const showId = buildShowId(movieId, body.showtime, auditorium);
+  let valkeyLockAcquired = false;
+
+  if (userId) {
+    try {
+      const lockResult = await lockSeats(showId, seatIdList, userId);
+      if (!lockResult.success) {
+        // Another user already has these seats locked — reject immediately
+        throw createHttpError(
+          409,
+          `Seats ${lockResult.conflictSeats.join(", ")} are currently being booked by another user. Please choose different seats or try again in a few minutes.`
+        );
+      }
+      valkeyLockAcquired = true;
+    } catch (err) {
+      // If err is our 409, re-throw it
+      if (err.status === 409) throw err;
+      // Valkey unavailable → fall through and rely on MongoDB conflict check only
+      console.warn("[createBookingService] Valkey lock unavailable, falling back to DB check:", err.message);
+    }
+  }
+
   // movie snapshot
   const movieSnapshot = movie
     ? {
       id: movie._id,
       title: movie.movieName || movie.title || "",
-      poster: movie.poster || movie.thumbnail || "",
+      poster: getUploadUrl(movie.poster || movie.latestTrailer?.thumbnail || movie.thumbnail || ""),
       category: Array.isArray(movie.categories) ? movie.categories[0] || "" : movie.category || "",
       durationMins: movie.duration || movie.runtime || 0,
       rating: movie.rating || null
     }
+
     : {
       id: movieId && mongoose.Types.ObjectId.isValid(String(movieId)) ? new mongoose.Types.ObjectId(movieId) : undefined,
       title: movieName || "",
@@ -232,7 +276,16 @@ export async function createBookingService({ user, body }) {
     meta: { rawRequest: { seatIds: seatIdList, clientSeats: rawSeats } }
   };
 
-  const booking = await Booking.create(doc);
+  let booking;
+  try {
+    booking = await Booking.create(doc);
+  } catch (dbErr) {
+    // If Mongo write fails, release the Valkey locks we just acquired
+    if (valkeyLockAcquired && userId) {
+      await releaseSeats(showId, seatIdList, userId).catch(() => {});
+    }
+    throw dbErr;
+  }
 
   // If card payment, create Razorpay order
   if (paymentMethod === "card") {
@@ -381,6 +434,28 @@ export async function verifyPaymentService({ razorpay_order_id, razorpay_payment
   ).populate("userId", "email fullName").exec();
 
   if (!booking) throw createHttpError(404, "Booking not found for this order");
+
+  // ── Release Valkey seat locks after confirmed payment ──────────────
+  // The MongoDB booking with status="confirmed" now blocks re-booking.
+  // We release the Valkey locks so they don't consume memory past this point.
+  try {
+    const userId = String(booking.userId?._id || booking.userId || "");
+    const auditorium = String(booking.auditorium || "Audi1").replace(/\s+/g, "");
+    const showtime = String(booking.showtime || "unknown").replace(/[^a-zA-Z0-9]/g, "-");
+    const movieId = String(booking.movieId || booking.movie?.id || "unknown").replace(/[^a-zA-Z0-9]/g, "-");
+    const showId = `${movieId}_${showtime}_${auditorium}`;
+    const seatIds = (booking.seats || []).map((s) =>
+      typeof s === "string" ? s : (s.seatId || s.id || "")
+    ).filter(Boolean);
+
+    if (userId && seatIds.length > 0) {
+      await confirmAndReleaseLocks(showId, seatIds, userId);
+    }
+  } catch (lockErr) {
+    // Non-fatal: booking is confirmed in DB regardless
+    console.warn("[verifyPaymentService] Could not release seat locks (non-fatal):", lockErr.message);
+  }
+
   return booking;
 }
 

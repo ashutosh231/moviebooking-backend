@@ -142,10 +142,11 @@ export function bookingConfirmationTemplate({ name, booking }) {
   const totalRupees = amountPaise ? (Number(amountPaise) / 100).toLocaleString("en-IN") : amount ? Number(amount).toLocaleString("en-IN") : "—";
 
   const posterHtml = posterUrl
-    ? `<img src="${posterUrl}" alt="${movieTitle}" width="120"
-            style="border-radius:8px;object-fit:cover;height:160px;
-                   box-shadow:0 4px 16px rgba(229,9,20,.3);float:left;margin-right:20px;" />`
+    ? `<div style="float:left;margin-right:20px;margin-bottom:10px;border-radius:8px;overflow:hidden;border:1px solid #333;">
+         <img src="${posterUrl}" alt="${movieTitle}" width="120" style="display:block;border:0;" />
+       </div>`
     : "";
+
 
   const content = `
     <h1 style="margin:0 0 6px;color:#fff;font-size:22px;font-weight:700;">
@@ -223,3 +224,82 @@ export function bookingConfirmationTemplate({ name, booking }) {
 
   return shell(content);
 }
+
+/* ─────────────────────────────────────────────────────────────────
+   Booking Cancellation Template
+───────────────────────────────────────────────────────────────── */
+export function bookingCancellationTemplate({ name, booking }) {
+  const movieTitle = booking?.movie?.title || booking?.movie?.movieName || "Your Movie";
+  const bookingId = (booking?._id || "").toString();
+
+  const content = `
+    <h1 style="margin:0 0 6px;color:#fff;font-size:22px;font-weight:700;">
+      Booking Cancelled 🛑
+    </h1>
+    <p style="margin:0 0 28px;color:#999;font-size:14px;line-height:1.6;">
+      Hi <strong style="color:#e50914;">${name}</strong>, your booking for <strong style="color:#fff;">${movieTitle}</strong> has been cancelled.
+    </p>
+
+    <div style="background:#1a1a1a;border:1px solid #2d0d0d;border-radius:12px;
+                 padding:24px;margin-bottom:24px;">
+      <table width="100%">
+        <tr>
+          <td style="color:#888;font-size:13px;padding-bottom:8px;">Booking ID</td>
+          <td align="right" style="color:#ccc;font-size:12px;font-family:'Courier New',monospace;
+                                    padding-bottom:8px;">${bookingId}</td>
+        </tr>
+        <tr>
+          <td style="color:#888;font-size:13px;">Status</td>
+          <td align="right" style="color:#e50914;font-size:13px;font-weight:700;">REFUNDED / CANCELLED</td>
+        </tr>
+      </table>
+    </div>
+
+    <p style="margin:0 0 16px;color:#999;font-size:14px;line-height:1.6;">
+      If a payment was made, your refund has been initiated and will reflect in your account within 5-7 business days.
+    </p>
+
+    <p style="margin:0;color:#555;font-size:12px;">
+      We hope to see you at the movies again soon!
+    </p>
+  `;
+  return shell(content);
+}
+
+/* ─────────────────────────────────────────────────────────────────
+   Movie Announcement Template (New / Featured)
+───────────────────────────────────────────────────────────────── */
+export function movieAnnouncementTemplate({ name = "Movie Fan", movie, isFeatured = false }) {
+  const movieTitle = movie.movieName || movie.title || "A New Blockbuster";
+  const description = movie.story || movie.description || "Checking out the latest addition to our cinema!";
+  const posterUrl = movie.poster || "";
+
+  const content = `
+    <h1 style="margin:0 0 6px;color:#fff;font-size:24px;font-weight:800;text-transform:uppercase;letter-spacing:1px;">
+      ${isFeatured ? "✨ Featured Release ✨" : "🎬 New Movie Added 🎬"}
+    </h1>
+    <p style="margin:0 0 28px;color:#bbb;font-size:15px;line-height:1.6;">
+      Hi ${name}, we just added a ${isFeatured ? 'must-watch masterpiece' : 'new title'} to our collection!
+    </p>
+
+    <!-- MOVIE SPOTLIGHT -->
+    <div style="background:#141414;border:1px solid #e50914;border-radius:16px;overflow:hidden;margin-bottom:32px;">
+      ${posterUrl ? `<img src="${posterUrl}" alt="${movieTitle}" style="width:100%;height:auto;display:block;" />` : ""}
+      <div style="padding:24px;text-align:center;">
+        <h2 style="margin:0 0 12px;color:#fff;font-size:26px;font-weight:900;">${movieTitle}</h2>
+        <p style="margin:0 0 24px;color:#888;font-size:14px;line-height:1.6;">${description}</p>
+        <a href="http://localhost:5173/movie/${movie._id}" 
+           style="display:inline-block;padding:14px 32px;background:#e50914;color:#fff;
+                  text-decoration:none;font-weight:700;border-radius:8px;font-size:14px;">
+          BOOK TICKETS NOW
+        </a>
+      </div>
+    </div>
+
+    <p style="margin:0;color:#555;font-size:12px;text-align:center;">
+      See you at CineVerse!
+    </p>
+  `;
+  return shell(content);
+}
+

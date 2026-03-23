@@ -6,7 +6,7 @@ import {
   getOccupiedSeatsService,
   verifyPaymentService,
 } from "../services/bookingService.js";
-import { sendBookingConfirmationEmail } from "../services/emailService.js";
+import { addNotificationJob } from "../queues/notificationQueue.js";
 
 
 /* ---------- Controllers (thin req/res layer) ---------- */
@@ -74,7 +74,21 @@ export async function listBookings(req, res) {
 
 export async function deleteBooking(req, res) {
   try {
-    await deleteBookingService(req.params.id);
+    // 1. Fetch booking before deleting to get user/movie info
+    const booking = await deleteBookingService(req.params.id);
+
+    // 2. Queue cancellation email
+    const userEmail = booking?.userId?.email || booking?.customer || "";
+    const userName  = booking?.userId?.fullName || booking?.customer || "Movie Fan";
+
+    if (userEmail && userEmail.includes("@")) {
+       await addNotificationJob('booking-cancellation', {
+        to: userEmail,
+        userName,
+        booking: booking.toObject ? booking.toObject() : booking
+      }).catch(err => console.warn("Cancellation job failed:", err.message));
+    }
+
     return res.json({ success: true, message: "Booking deleted" });
   } catch (err) {
     console.error("deleteBooking error:", err && err.stack ? err.stack : err);
@@ -102,17 +116,21 @@ export async function confirmPayment(req, res) {
   try {
     const booking = await verifyPaymentService(req.body);
 
-    // Fire-and-forget booking confirmation email
+    // Queue booking confirmation job
     const userEmail = booking?.userId?.email || req.user?.email || req.body.email || booking?.customer || "";
     const userName  = booking?.userId?.fullName || req.user?.name || req.user?.fullName || booking?.customer || "Movie Fan";
     
     if (userEmail && userEmail.includes("@")) {
-      sendBookingConfirmationEmail({ to: userEmail, name: userName, booking })
-        .catch((err) => console.warn("Booking email failed (non-fatal):", err?.message || err));
+      await addNotificationJob("booking-confirmation", {
+        to: userEmail,
+        userName,
+        booking: booking.toObject ? booking.toObject() : booking
+      }).catch((err) => console.warn("Booking confirmation job failed:", err.message));
     }
 
 
     return res.json({ success: true, message: "Payment verified successfully", booking });
+
   } catch (err) {
     console.error("confirmPayment error:", err && err.stack ? err.stack : err);
     return res.status(err.status || 500).json({ success: false, message: err.message || "Server error" });

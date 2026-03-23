@@ -11,7 +11,7 @@ const createHttpError = (status, message) => {
 	return err;
 };
 
-const getUploadUrl = (val) => {
+export const getUploadUrl = (val) => {
 	if (!val) return null;
 	// Already a full Cloudinary / external URL — return as-is
 	if (typeof val === "string" && /^(https?:\/\/)/.test(val)) return val;

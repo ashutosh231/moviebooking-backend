@@ -7,6 +7,7 @@ import {
 } from "../services/moviesService.js";
 
 import { clearCache } from "../middlewares/cache.js";
+import { addNotificationJob } from "../queues/notificationQueue.js";
 
 /* ---------------------- controllers ---------------------- */
 export async function createMovie(req, res) {
@@ -17,8 +18,19 @@ export async function createMovie(req, res) {
     });
     // Invalidate movie cache
     await clearCache("cache:/api/movies*");
+
+    // Queue notifications
+    addNotificationJob("new-movie", { movie: saved })
+      .catch(err => console.warn("New movie job failed:", err.message));
+
+    if (saved.type === "featured") {
+      addNotificationJob("featured-movie", { movie: saved })
+        .catch(err => console.warn("Featured movie job failed:", err.message));
+    }
+
     return res.status(201).json({ success: true, message: "Movie created", data: saved });
   } catch (err) {
+
     console.error("createMovie error:", err);
     const status = err.status || 500;
     return res.status(status).json({ success: false, message: err.message || "Server error" });
