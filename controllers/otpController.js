@@ -77,12 +77,20 @@ export async function verifyOtpAndRegister(req, res) {
 
     const result = await registerService(req.body);
 
+    res.cookie('token', result.token, { 
+      httpOnly: true, 
+      secure: process.env.NODE_ENV === 'production', 
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', 
+      maxAge: 30 * 24 * 60 * 60 * 1000 
+    });
+
     return res.status(201).json({
       success: true,
       message: "Email verified and account created successfully!",
       token: result.token,
       user: result.user,
     });
+
   } catch (err) {
     console.error("verifyOtpAndRegister error:", err);
     return res.status(400).json({ success: false, message: err.message || "Registration failed" });
