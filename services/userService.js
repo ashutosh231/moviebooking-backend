@@ -51,7 +51,10 @@ export const registerService = async (data) => {
       email: newUser.email,
       phone: newUser.phone,
       birthDate: newUser.birthDate,
+      avatar: newUser.avatar,
+      onboardingCompleted: newUser.onboardingCompleted,
     },
+
   };
 };
 
@@ -77,7 +80,10 @@ export const loginService = async (data) => {
       phone: user.phone,
       birthDate: user.birthDate,
       role: user.role || "user",
+      avatar: user.avatar,
+      onboardingCompleted: user.onboardingCompleted,
     },
+
   };
 };
 
@@ -101,7 +107,9 @@ export const adminLoginService = async (data) => {
       username: user.username,
       email: user.email,
       role: "admin",
+      avatar: user.avatar,
     },
+
   };
 };
 
