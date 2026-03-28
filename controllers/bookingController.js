@@ -74,22 +74,25 @@ export async function listBookings(req, res) {
 
 export async function deleteBooking(req, res) {
   try {
-    // 1. Fetch booking before deleting to get user/movie info
-    const booking = await deleteBookingService(req.params.id);
+    const reason = String(req.body?.reason || "").trim();
 
-    // 2. Queue cancellation email
+    // 1. Soft-cancel the booking (status=cancelled, stores reason)
+    const booking = await deleteBookingService(req.params.id, reason);
+
+    // 2. Queue cancellation email to user
     const userEmail = booking?.userId?.email || booking?.customer || "";
     const userName  = booking?.userId?.fullName || booking?.customer || "Movie Fan";
 
     if (userEmail && userEmail.includes("@")) {
-       await addNotificationJob('booking-cancellation', {
+       await addNotificationJob("booking-cancellation", {
         to: userEmail,
         userName,
-        booking: booking.toObject ? booking.toObject() : booking
+        reason,
+        booking: booking.toObject ? booking.toObject() : booking,
       }).catch(err => console.warn("Cancellation job failed:", err.message));
     }
 
-    return res.json({ success: true, message: "Booking deleted" });
+    return res.json({ success: true, message: "Booking cancelled" });
   } catch (err) {
     console.error("deleteBooking error:", err && err.stack ? err.stack : err);
     return res.status(err.status || 500).json({ success: false, message: err.message || "Server error" });

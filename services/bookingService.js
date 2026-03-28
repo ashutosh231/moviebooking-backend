@@ -357,12 +357,13 @@ export async function createBookingService({ user, body }) {
 export async function getUserBookingsService({ userId, paymentStatus, status }) {
   const q = { userId };
 
-  if (paymentStatus && String(paymentStatus).toLowerCase() !== "all") {
+  if (status === "cancelled") {
+    q.status = "cancelled";
+  } else if (paymentStatus && String(paymentStatus).toLowerCase() !== "all") {
     q.paymentStatus = String(paymentStatus).toLowerCase();
-  } else if (status && String(status).toLowerCase() !== "all") {
-    q.status = String(status).toLowerCase();
   } else {
-    q.paymentStatus = "paid";
+    // Return both paid bookings AND cancelled (so user can see cancel history + reason)
+    q.$or = [{ paymentStatus: "paid" }, { status: "cancelled" }];
   }
 
   return Booking.find(q).sort({ createdAt: -1 }).lean().exec();
@@ -391,10 +392,21 @@ export async function listBookingsService({ movieId, page = 1, limit = 100, paym
   return { total, page: pg, limit: lim, items };
 }
 
-export async function deleteBookingService(id) {
+export async function deleteBookingService(id, reason = "") {
   if (!id || !mongoose.Types.ObjectId.isValid(id)) throw createHttpError(400, "Invalid id");
-  const b = await Booking.findByIdAndDelete(id).lean().exec();
+
+  const b = await Booking.findByIdAndUpdate(
+    id,
+    {
+      status: "cancelled",
+      cancellationReason: String(reason || "").trim(),
+      cancelledAt: new Date(),
+    },
+    { new: true }
+  ).populate("userId", "email fullName").exec();
+
   if (!b) throw createHttpError(404, "Booking not found");
+  return b;
 }
 
 export async function getOccupiedSeatsService({ movieId, movieName, showtime: showtimeRaw, audi }) {

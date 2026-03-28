@@ -36,8 +36,8 @@ export async function sendBookingConfirmationEmail({ to, name, booking }) {
 /**
  * Send booking cancellation email.
  */
-export async function sendBookingCancellationEmail({ to, name, booking }) {
-  const html = bookingCancellationTemplate({ name, booking });
+export async function sendBookingCancellationEmail({ to, name, booking, reason }) {
+  const html = bookingCancellationTemplate({ name, booking, reason });
   const movieTitle = booking?.movie?.title || booking?.movie?.movieName || "your movie";
   await transporter.sendMail({
     from: FROM_ADDRESS,

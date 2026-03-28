@@ -73,6 +73,10 @@ const bookingSchema = new Schema(
     // store razorpay order/payment meta (optional)
     razorpayOrder: { type: Schema.Types.Mixed, default: null },
 
+    // cancellation
+    cancellationReason: { type: String, default: "" },
+    cancelledAt: { type: Date, default: null },
+
     meta: { type: Schema.Types.Mixed, default: {} },
   },
   { timestamps: true }

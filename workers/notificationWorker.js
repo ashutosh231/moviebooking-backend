@@ -34,6 +34,7 @@ const worker = new Worker(
             to: data.to,
             name: data.userName,
             booking: data.booking,
+            reason: data.reason || "",
           });
           break;
 

@@ -233,18 +233,41 @@ export function bookingConfirmationTemplate({ name, booking }) {
 /* ─────────────────────────────────────────────────────────────────
    Booking Cancellation Template
 ───────────────────────────────────────────────────────────────── */
-export function bookingCancellationTemplate({ name, booking }) {
+export function bookingCancellationTemplate({ name, booking, reason }) {
   const movieTitle = booking?.movie?.title || booking?.movie?.movieName || "Your Movie";
   const bookingId = (booking?._id || "").toString();
+  const showtimeDate = booking?.showtime ? new Date(booking.showtime) : null;
+  const dateStr = showtimeDate
+    ? showtimeDate.toLocaleDateString("en-IN", { weekday: "long", year: "numeric", month: "long", day: "numeric", timeZone: "Asia/Kolkata" })
+    : "—";
+  const timeStr = showtimeDate
+    ? showtimeDate.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true, timeZone: "Asia/Kolkata" })
+    : "—";
+  const totalRupees = booking?.amountPaise
+    ? (Number(booking.amountPaise) / 100).toLocaleString("en-IN")
+    : booking?.amount ? Number(booking.amount).toLocaleString("en-IN") : null;
 
   const content = `
     <h1 style="margin:0 0 6px;color:#fff;font-size:22px;font-weight:700;">
       Booking Cancelled 🛑
     </h1>
     <p style="margin:0 0 28px;color:#999;font-size:14px;line-height:1.6;">
-      Hi <strong style="color:#e50914;">${name}</strong>, your booking for <strong style="color:#fff;">${movieTitle}</strong> has been cancelled.
+      Hi <strong style="color:#e50914;">${name}</strong>, we're sorry to inform you that your booking for
+      <strong style="color:#fff;">${movieTitle}</strong> has been cancelled by our team.
     </p>
 
+    <!-- REASON BOX -->
+    ${reason ? `
+    <div style="background:#1f0808;border:1.5px solid #e50914;border-radius:12px;
+                 padding:20px 24px;margin-bottom:24px;">
+      <p style="margin:0 0 8px;color:#e50914;font-size:11px;font-weight:700;
+                 letter-spacing:1.5px;text-transform:uppercase;">Reason for Cancellation</p>
+      <p style="margin:0;color:#f5c6c6;font-size:15px;line-height:1.6;font-style:italic;">
+        "${reason}"
+      </p>
+    </div>` : ""}
+
+    <!-- BOOKING DETAILS -->
     <div style="background:#1a1a1a;border:1px solid #2d0d0d;border-radius:12px;
                  padding:24px;margin-bottom:24px;">
       <table width="100%">
@@ -253,24 +276,44 @@ export function bookingCancellationTemplate({ name, booking }) {
           <td align="right" style="color:#ccc;font-size:12px;font-family:'Courier New',monospace;
                                     padding-bottom:8px;">${bookingId}</td>
         </tr>
+        <tr>
+          <td style="color:#888;font-size:13px;padding-bottom:8px;">Movie</td>
+          <td align="right" style="color:#fff;font-size:13px;font-weight:600;padding-bottom:8px;">${movieTitle}</td>
+        </tr>
+        <tr>
+          <td style="color:#888;font-size:13px;padding-bottom:8px;">Date</td>
+          <td align="right" style="color:#ccc;font-size:13px;padding-bottom:8px;">${dateStr}</td>
+        </tr>
+        <tr>
+          <td style="color:#888;font-size:13px;padding-bottom:8px;">Time</td>
+          <td align="right" style="color:#ccc;font-size:13px;padding-bottom:8px;">${timeStr}</td>
+        </tr>
         ${booking?.cinema?.name ? `
         <tr>
           <td style="color:#888;font-size:13px;padding-bottom:8px;">Cinema</td>
           <td align="right" style="color:#ccc;font-size:13px;padding-bottom:8px;">${booking.cinema.name}</td>
         </tr>` : ""}
+        ${totalRupees ? `
         <tr>
-          <td style="color:#888;font-size:13px;">Status</td>
-          <td align="right" style="color:#e50914;font-size:13px;font-weight:700;">REFUNDED / CANCELLED</td>
+          <td style="color:#888;font-size:13px;border-top:1px solid #2a2a2a;padding-top:10px;">Amount Paid</td>
+          <td align="right" style="color:#fff;font-size:15px;font-weight:700;border-top:1px solid #2a2a2a;padding-top:10px;">₹${totalRupees}</td>
+        </tr>` : ""}
+        <tr>
+          <td style="color:#888;font-size:13px;padding-top:8px;">Status</td>
+          <td align="right" style="color:#e50914;font-size:13px;font-weight:700;padding-top:8px;">CANCELLED</td>
         </tr>
       </table>
     </div>
 
-    <p style="margin:0 0 16px;color:#999;font-size:14px;line-height:1.6;">
-      If a payment was made, your refund has been initiated and will reflect in your account within 5-7 business days.
-    </p>
+    <!-- REFUND NOTE -->
+    <div style="background:#111c11;border:1px solid #1a3a1a;border-radius:10px;padding:16px;margin-bottom:20px;">
+      <p style="margin:0;color:#4caf50;font-size:13px;text-align:center;">
+        💳 If a payment was made, your refund has been initiated and will reflect within 5–7 business days.
+      </p>
+    </div>
 
-    <p style="margin:0;color:#555;font-size:12px;">
-      We hope to see you at the movies again soon!
+    <p style="margin:0;color:#555;font-size:12px;text-align:center;">
+      We hope to see you at the movies again soon! — <strong>The CineVerse Team</strong>
     </p>
   `;
   return shell(content);

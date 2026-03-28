@@ -21,12 +21,12 @@ const bookingRouter = express.Router();
 // ── Existing booking routes ───────────────────────────────
 bookingRouter.post("/", authMiddleware, bookingLimiter, createBooking);
 bookingRouter.post("/verify-payment", bookingLimiter, confirmPayment);
-bookingRouter.get("/", listBookings);
-bookingRouter.get("/occupied", getOccupiedSeats);
+bookingRouter.get("/", authMiddleware, listBookings);
+bookingRouter.get("/occupied", getOccupiedSeats,authMiddleware);
 
 // Specific static routes must come BEFORE dynamic routes like "/:id"
 bookingRouter.get("/my", authMiddleware, getBooking);
-bookingRouter.delete("/:id", deleteBooking);
+bookingRouter.delete("/:id", authMiddleware, deleteBooking);
 
 // ── Seat Locking routes (Valkey/Upstash) ─────────────────
 // POST  /api/bookings/lock-seats      → Lock seats for 5 min
