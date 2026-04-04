@@ -5,6 +5,7 @@ import {
   deleteBookingService,
   getOccupiedSeatsService,
   verifyPaymentService,
+  handleRazorpayWebhookService,
 } from "../services/bookingService.js";
 import { addNotificationJob } from "../queues/notificationQueue.js";
 
@@ -140,6 +141,31 @@ export async function confirmPayment(req, res) {
   }
 }
 
+
+export async function razorpayWebhook(req, res) {
+  try {
+    const signature = req.headers["x-razorpay-signature"];
+    if (!signature) {
+      return res.status(400).send("Missing signature");
+    }
+
+    const event = req.body;
+    let expectedSignature;
+    try {
+      expectedSignature = await handleRazorpayWebhookService(event, signature, req.rawBody); // Or just payload
+    } catch(err) {
+      console.error("Webhook service error:", err.message);
+      return res.status(200).send("Handled with skip or error"); // Razorpay expects 200 to not retry endlessly unless it's a temp error. Be careful.
+    }
+
+    // Queue booking confirmation job
+    // Actually, we can move the job queue logic into the service so that both verifyPayment and webhook share it or at least the webhook service handles it since webhook is headless
+    return res.status(200).json({ success: true });
+  } catch (err) {
+    console.error("razorpayWebhook error:", err && err.stack ? err.stack : err);
+    return res.status(err.status || 500).json({ success: false, message: err.message || "Server error" });
+  }
+}
 
 export default {
   createBooking,

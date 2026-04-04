@@ -494,6 +494,114 @@ export async function verifyPaymentService({ razorpay_order_id, razorpay_payment
   return booking;
 }
 
+export async function handleRazorpayWebhookService(eventPayload, signature, rawBody) {
+  const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
+  if (!webhookSecret) {
+    console.warn("RAZORPAY_WEBHOOK_SECRET is not defined. Webhooks cannot be completely verified securely if relying on this check alone, but for Razorpay we MUST have it.");
+    throw createHttpError(500, "Webhook secret not configured on server");
+  }
+
+  // Verify HMAC signature
+  // We MUST use the raw body buffer to guarantee signature matching.
+  const bodyToVerify = rawBody ? rawBody.toString('utf8') : JSON.stringify(eventPayload);
+  
+  const expectedSignature = crypto
+    .createHmac("sha256", webhookSecret)
+    .update(bodyToVerify)
+    .digest("hex");
+
+  if (expectedSignature !== signature) {
+    throw createHttpError(400, "Invalid webhook signature");
+  }
+
+  // Razorpay event types you typically want: "order.paid" or "payment.captured"
+  // order.paid is usually best because it directly corresponds to the order we created.
+  const eventName = eventPayload?.event;
+  if (eventName === "order.paid") {
+    const orderObj = eventPayload?.payload?.order?.entity;
+    const paymentObj = eventPayload?.payload?.payment?.entity;
+    
+    if (orderObj && orderObj.id) {
+      const orderId = orderObj.id;
+      const paymentId = paymentObj?.id; // It might be under payment entity
+
+      const booking = await Booking.findOne({ paymentSessionId: orderId });
+      
+      if (!booking) {
+        console.warn(`[Webhook] Booking not found for orderId ${orderId}`);
+        return; // Nothing to do
+      }
+
+      // Idempotency: if already paid, we skip
+      if (booking.paymentStatus === "paid" || booking.status === "confirmed") {
+        console.log(`[Webhook] Booking ${booking._id} already confirmed. Skipping.`);
+        return;
+      }
+
+      console.log(`[Webhook] Confirming pending booking ${booking._id} via webhook`);
+
+      // Update to paid
+      booking.paymentStatus = "paid";
+      booking.status = "confirmed";
+      if (paymentId) {
+        booking.paymentIntentId = paymentId;
+        // The signature the webhook uses is different from the frontend signature, 
+        // so we just record the webhook fulfillment.
+        booking.razorpayOrder = {
+          orderId: orderId,
+          paymentId: paymentId,
+          webhookVerified: true
+        };
+      }
+      
+      await booking.save();
+
+      // Release Valkey seat locks since booking is now confirmed
+      try {
+        const userId = String(booking.userId?._id || booking.userId || "");
+        const auditorium = String(booking.auditorium || "Audi1").replace(/\s+/g, "");
+        const showtime = String(booking.showtime || "unknown").replace(/[^a-zA-Z0-9]/g, "-");
+        const movieId = String(booking.movieId || booking.movie?.id || "unknown").replace(/[^a-zA-Z0-9]/g, "-");
+        const showId = `${movieId}_${showtime}_${auditorium}`;
+        const seatIds = (booking.seats || []).map((s) =>
+          typeof s === "string" ? s : (s.seatId || s.id || "")
+        ).filter(Boolean);
+
+        if (userId && seatIds.length > 0) {
+          await confirmAndReleaseLocks(showId, seatIds, userId);
+        }
+      } catch (lockErr) {
+        console.warn("[Webhook] Could not release seat locks (non-fatal):", lockErr.message);
+      }
+
+      // Dynamic import for the queue to avoid circular dependency if not careful, 
+      // or we can import it at the top of the file.
+      // We'll require it here since it's only executed on webhook.
+      try {
+        const { addNotificationJob } = await import("../queues/notificationQueue.js");
+        
+        // Find user details (populate userId if needed, though we didn't populate above)
+        await booking.populate("userId", "email fullName");
+        const userEmail = booking?.userId?.email || booking?.customer || "";
+        const userName  = booking?.userId?.fullName || booking?.customer || "Movie Fan";
+        
+        if (userEmail && userEmail.includes("@")) {
+          await addNotificationJob("booking-confirmation", {
+            to: userEmail,
+            userName,
+            booking: booking.toObject ? booking.toObject() : booking
+          });
+        }
+      } catch (qErr) {
+         console.warn("[Webhook] Confirmation email job failed:", qErr.message);
+      }
+    }
+  } else {
+    // Unhandled event type, just log and ignore
+    console.log(`[Webhook] Ignoring unhandled event: ${eventName}`);
+  }
+}
+
 export default {
   createBookingService,
   getUserBookingsService,
@@ -501,4 +609,5 @@ export default {
   deleteBookingService,
   getOccupiedSeatsService,
   verifyPaymentService,
+  handleRazorpayWebhookService,
 };

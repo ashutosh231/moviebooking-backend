@@ -9,7 +9,7 @@ dotenv.config();
  * We use IORedis as the underlying driver, which BullMQ requires.
  */
 const redisOptions = {
-  maxRetriesPerRequest: null,
+  maxRetriesPerRequest: null,//
   enableReadyCheck: false,
 };
 

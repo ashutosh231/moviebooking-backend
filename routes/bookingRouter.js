@@ -7,6 +7,7 @@ import {
   confirmPayment,
   deleteBooking,
   getOccupiedSeats,
+  razorpayWebhook,
 } from "../controllers/bookingController.js";
 import {
   lockSeatsController,
@@ -21,6 +22,7 @@ const bookingRouter = express.Router();
 // ── Existing booking routes ───────────────────────────────
 bookingRouter.post("/", authMiddleware, bookingLimiter, createBooking);
 bookingRouter.post("/verify-payment", bookingLimiter, confirmPayment);
+bookingRouter.post("/webhook/razorpay", razorpayWebhook);
 bookingRouter.get("/", authMiddleware, listBookings);
 bookingRouter.get("/occupied", getOccupiedSeats,authMiddleware);
 

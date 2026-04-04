@@ -69,7 +69,7 @@ export const loginService = async (data) => {
     throw new Error("Invalid password");
   }
   // Include role in the token so frontend can detect admin users
-  const token = mkToken({ id: user._id.toString(), role: user.role || "user" });
+  const token = mkToken({ id: user._id.toString(), role: user.role || "user" });//
   return {
     token,
     user: {
