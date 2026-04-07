@@ -1,5 +1,5 @@
 import express from "express";
-import { registerUser, loginUser, adminLoginUser, getUserProfile, updateUserProfile, uploadAvatar, logoutUser } from "../controllers/userController.js";
+import { registerUser, loginUser, adminLoginUser, getUserProfile, updateUserProfile, uploadAvatar, logoutUser, googleLogin } from "../controllers/userController.js";
 import { sendOtp, verifyOtpAndRegister, forgotPassword, resetPassword } from "../controllers/otpController.js";
 import { registerValidation } from "../middlewares/user.validator.js";
 import { authLimiter } from "../middlewares/rateLimiter.js";
@@ -31,6 +31,7 @@ userRouter.post("/reset-password", authLimiter, resetPassword);
 userRouter.post("/register", authLimiter, registerValidation, registerUser);
 
 userRouter.post("/login", authLimiter, loginUser);
+userRouter.post("/google", authLimiter, googleLogin);
 userRouter.post("/admin-login", authLimiter, adminLoginUser);
 userRouter.post("/logout", logoutUser);
 

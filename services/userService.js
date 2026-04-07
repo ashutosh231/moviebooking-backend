@@ -2,6 +2,8 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import User from "../models/userModel.js";
 import dotenv from "dotenv";
+import axios from "axios";
+import { v4 as uuidv4 } from "uuid";
 dotenv.config();
 
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -113,4 +115,66 @@ export const adminLoginService = async (data) => {
   };
 };
 
-  
+export const googleLoginService = async (token) => {
+  if (!token) throw new Error("No token provided");
+
+  // Verify the Google/Firebase ID token using Firebase Identity Toolkit public endpoint
+  let googleUser;
+  try {
+    const res = await axios.post(
+      `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${process.env.FIREBASE_API_KEY}`,
+      { idToken: token }
+    );
+    if (!res.data.users || res.data.users.length === 0) {
+      throw new Error("Invalid Google token");
+    }
+    googleUser = res.data.users[0];
+  } catch (err) {
+    throw new Error("Invalid Google token");
+  }
+
+  const { email, displayName, photoUrl } = googleUser;
+  const name = displayName;
+  const picture = photoUrl;
+
+  if (!email) throw new Error("Google account has no email");
+
+  // Find user by email
+  let user = await User.findOne({ email: email.toLowerCase().trim() });
+
+  if (!user) {
+    // Automatically register if not found
+    const hashedPassword = await bcrypt.hash(uuidv4(), 10);
+    user = await User.create({
+      fullName: name || "User",
+      username: `user_${uuidv4().substring(0, 8)}`,
+      email: email,
+      phone: "0000000000", // Default as not provided by Google
+      birthDate: new Date(), // Default
+      password: hashedPassword,
+      avatar: picture || "",
+    });
+  } else if (!user.avatar && picture) {
+    // Optionally update missing avatar
+    user.avatar = picture;
+    await user.save();
+  }
+
+  // Reuse mkToken defined above in this file!
+  const jwtToken = jwt.sign({ id: user._id.toString(), role: user.role || "user" }, process.env.JWT_SECRET, { expiresIn: "24h" });
+
+  return {
+    token: jwtToken,
+    user: {
+      id: user._id,
+      fullName: user.fullName,
+      username: user.username,
+      email: user.email,
+      phone: user.phone,
+      birthDate: user.birthDate,
+      role: user.role || "user",
+      avatar: user.avatar,
+      onboardingCompleted: user.onboardingCompleted,
+    },
+  };
+};

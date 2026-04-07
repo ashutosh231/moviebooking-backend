@@ -1,5 +1,5 @@
 import { validationResult } from "express-validator";
-import { registerService, loginService, adminLoginService } from "../services/userService.js";
+import { registerService, loginService, adminLoginService, googleLoginService } from "../services/userService.js";
 import User from "../models/userModel.js";
 import { deleteFromCloudinary } from "../config/cloudinary.js";
 
@@ -80,6 +80,36 @@ export const loginUser = async (req, res) => {
             message: err.message,
         });
     };
+};
+
+export const googleLogin = async (req, res) => {
+    try {
+        const { token } = req.body;
+        if (!token) {
+            return res.status(400).json({ success: false, message: "Token is required" });
+        }
+        
+        const result = await googleLoginService(token);
+        
+        // Similar to regular login, set HTTP cookie
+        res.cookie('token', result.token, { 
+          httpOnly: true, 
+          secure: process.env.NODE_ENV === 'production', 
+          sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', 
+          maxAge: 30 * 24 * 60 * 60 * 1000 
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: "Google login successful",
+            user: result.user
+        });
+    } catch (err) {
+        return res.status(400).json({
+            success: false,
+            message: err.message || "Google login failed"
+        });
+    }
 };
 
 export const adminLoginUser = async (req, res) => {
