@@ -125,6 +125,27 @@ const normalizeItemForOutput = (it = {}) => {
 
 	obj.auditorium = raw.auditorium || null;
 
+	// Automatically map older manual dates to future sequence starting from today
+	if (Array.isArray(obj.slots) && obj.slots.length > 0) {
+		const sortedUniqueDates = [...new Set(obj.slots.map((s) => s.date).filter(Boolean))].sort();
+		const today = new Date();
+		const dateMapping = {};
+
+		sortedUniqueDates.forEach((oldDateStr, index) => {
+			const targetDate = new Date(today);
+			targetDate.setDate(today.getDate() + index); // Map oldest date to today, next to tomorrow, etc.
+			const yyyy = targetDate.getFullYear();
+			const mm = String(targetDate.getMonth() + 1).padStart(2, '0');
+			const dd = String(targetDate.getDate()).padStart(2, '0');
+			dateMapping[oldDateStr] = `${yyyy}-${mm}-${dd}`;
+		});
+
+		obj.slots = obj.slots.map((s) => ({
+			...s,
+			date: dateMapping[s.date] || s.date,
+		}));
+	}
+
 	return obj;
 };
 
